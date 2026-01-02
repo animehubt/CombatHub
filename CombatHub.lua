@@ -2,125 +2,139 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UIS = game:GetService("UserInputService")
-local TweenService = game:GetService("TweenService")
 
---// SETTINGS & CONFIG
+--// SETTINGS
 local Config = {
-    Enabled = false,
-    HardLock = true,
-    ShowFOV = true,
-    FOVRadius = 150,
-    RotateSpeed = 18,
-    LockPart = "HumanoidRootPart",
-    ThemeColor = Color3.fromRGB(180, 100, 255)
+	Enabled = true,
+	RotateSpeed = 15,
+	LockPart = "HumanoidRootPart", -- Can be "Head" or "HumanoidRootPart"
+	MenuKey = Enum.KeyCode.K,
+	LockKey = Enum.KeyCode.Q
 }
 
 --// VARIABLES
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
-local mouse = player:GetMouse()
 local target = nil
 local menuOpen = false
 
---// FOV CIRCLE
-local FOVCircle = Drawing.new("Circle")
-FOVCircle.Thickness = 2
-FOVCircle.Color = Config.ThemeColor
-FOVCircle.Filled = false
-FOVCircle.Transparency = 0.7
-FOVCircle.Visible = Config.ShowFOV
-
---// GUI SETUP
-local gui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
-gui.Name = "CombatHub_V3"
+--// ================= GUI SETUP =================
+local gui = Instance.new("ScreenGui")
+gui.Name = "UniversalCombatHub"
 gui.ResetOnSpawn = false
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+gui.Parent = player:WaitForChild("PlayerGui")
 
+-- Main Menu Frame
 local main = Instance.new("Frame", gui)
-main.Size = UDim2.new(0, 320, 0, 400)
-main.Position = UDim2.new(0.5, -160, 0.5, -200)
-main.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
+main.Size = UDim2.new(0, 250, 0, 180)
+main.Position = UDim2.new(0.5, -125, 0.4, -90)
+main.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
 main.BorderSizePixel = 0
-main.Visible = false
-Instance.new("UICorner", main)
+main.Visible = false -- Controlled by 'K'
 
+local corner = Instance.new("UICorner", main)
 local stroke = Instance.new("UIStroke", main)
-stroke.Color = Config.ThemeColor
+stroke.Color = Color3.fromRGB(130, 80, 255)
 stroke.Thickness = 2
 
---// TARGET HUD (Quality of Life)
-local targetHud = Instance.new("Frame", gui)
-targetHud.Size = UDim2.new(0, 150, 0, 50)
-targetHud.BackgroundColor3 = Color3.fromRGB(0,0,0)
-targetHud.BackgroundTransparency = 0.5
-targetHud.Visible = false
-Instance.new("UICorner", targetHud)
+local title = Instance.new("TextLabel", main)
+title.Size = UDim2.new(1, 0, 0, 40)
+title.Text = "COMBAT HUB PRO"
+title.TextColor3 = Color3.new(1, 1, 1)
+title.Font = Enum.Font.GothamBold
+title.BackgroundTransparency = 1
 
-local targetName = Instance.new("TextLabel", targetHud)
-targetName.Size = UDim2.new(1, 0, 0.5, 0)
-targetName.TextColor3 = Color3.new(1,1,1)
-targetName.BackgroundTransparency = 1
-targetName.Font = Enum.Font.GothamBold
+-- Status Label
+local status = Instance.new("TextLabel", main)
+status.Size = UDim2.new(1, 0, 0, 30)
+status.Position = UDim2.new(0, 0, 0, 40)
+status.Text = "Status: READY"
+status.TextColor3 = Color3.fromRGB(150, 150, 150)
+status.Font = Enum.Font.Gotham
+status.BackgroundTransparency = 1
 
---// TARGETING LOGIC
-local function getTarget()
-    local closest = nil
-    local dist = Config.FOVRadius
+local hint = Instance.new("TextLabel", main)
+hint.Size = UDim2.new(1, 0, 0, 80)
+hint.Position = UDim2.new(0, 0, 0, 80)
+hint.Text = "[K] Close Menu\n[Q] Lock Onto Closest\n[Q] Again to Unlock"
+hint.TextColor3 = Color3.fromRGB(100, 100, 100)
+hint.Font = Enum.Font.Gotham
+hint.TextSize = 12
+hint.BackgroundTransparency = 1
 
-    for _, p in ipairs(Players:GetPlayers()) do
-        if p ~= player and p.Character and p.Character:FindFirstChild(Config.LockPart) then
-            local hum = p.Character:FindFirstChild("Humanoid")
-            if hum and hum.Health > 0 then
-                local pos, onScreen = camera:WorldToViewportPoint(p.Character[Config.LockPart].Position)
-                if onScreen then
-                    local mouseDist = (Vector2.new(pos.X, pos.Y) - UIS:GetMouseLocation()).Magnitude
-                    if mouseDist < dist then
-                        dist = mouseDist
-                        closest = p.Character
-                    end
-                end
-            end
-        end
-    end
-    return closest
+--// ================= TARGETING LOGIC =================
+local function getClosestPlayerToCursor()
+	local closestPlayer = nil
+	local shortestDistance = math.huge
+	local mousePos = UIS:GetMouseLocation()
+
+	for _, v in pairs(Players:GetPlayers()) do
+		if v ~= player and v.Character and v.Character:FindFirstChild(Config.LockPart) then
+			local root = v.Character[Config.LockPart]
+			local screenPos, onScreen = camera:WorldToViewportPoint(root.Position)
+			
+			if onScreen then
+				local distance = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
+				if distance < shortestDistance then
+					closestPlayer = v.Character
+					shortestDistance = distance
+				end
+			end
+		end
+	end
+	return closestPlayer
 end
 
---// INPUT HANDLER
-UIS.InputBegan:Connect(function(i, g)
-    if g then return end
-    if i.KeyCode == Enum.KeyCode.K then
-        menuOpen = not menuOpen
-        main.Visible = menuOpen
-        UIS.MouseIconEnabled = not menuOpen
-    end
-    if i.KeyCode == Enum.KeyCode.Q then
-        target = (not target and Config.Enabled) and getTarget() or nil
-    end
+--// ================= INPUTS =================
+UIS.InputBegan:Connect(function(input, processed)
+	if processed then return end
+	
+	-- Toggle Menu
+	if input.KeyCode == Config.MenuKey then
+		menuOpen = not menuOpen
+		main.Visible = menuOpen
+	end
+	
+	-- Toggle Lock
+	if input.KeyCode == Config.LockKey then
+		if target then
+			target = nil
+			status.Text = "Status: UNLOCKED"
+			status.TextColor3 = Color3.fromRGB(200, 50, 50)
+		else
+			target = getClosestPlayerToCursor()
+			if target then
+				status.Text = "Status: LOCKED -> " .. target.Name
+				status.TextColor3 = Color3.fromRGB(50, 200, 50)
+			end
+		end
+	end
 end)
 
---// MAIN RENDER LOOP
+--// ================= MAIN LOOP =================
 RunService.RenderStepped:Connect(function(dt)
-    -- Update FOV Circle
-    FOVCircle.Position = UIS:GetMouseLocation()
-    FOVCircle.Radius = Config.FOVRadius
-    FOVCircle.Visible = Config.ShowFOV and menuOpen == false
-    
-    if target and target:FindFirstChild(Config.LockPart) and target.Humanoid.Health > 0 then
-        local root = player.Character.HumanoidRootPart
-        local aimPos = target[Config.LockPart].Position
-        
-        -- Smooth Rotation (The "Lock")
-        local lookAt = CFrame.lookAt(root.Position, Vector3.new(aimPos.X, root.Position.Y, aimPos.Z))
-        root.CFrame = root.CFrame:Lerp(lookAt, math.clamp(dt * Config.RotateSpeed, 0, 1))
-        
-        -- Target HUD Update
-        targetHud.Visible = true
-        targetHud.Position = UDim2.new(0, UIS:GetMouseLocation().X + 20, 0, UIS:GetMouseLocation().Y + 20)
-        targetName.Text = target.Name .. " | " .. math.floor((root.Position - aimPos).Magnitude) .. " studs"
-    else
-        target = nil
-        targetHud.Visible = false
-    end
+	if target and target:FindFirstChild(Config.LockPart) then
+		local myChar = player.Character
+		if myChar and myChar:FindFirstChild("HumanoidRootPart") then
+			local myRoot = myChar.HumanoidRootPart
+			local aimAt = target[Config.LockPart].Position
+			
+			-- Only rotate the character's facing direction (Horizontal Lock)
+			local goalCF = CFrame.lookAt(myRoot.Position, Vector3.new(aimAt.X, myRoot.Position.Y, aimAt.Z))
+			myRoot.CFrame = myRoot.CFrame:Lerp(goalCF, math.clamp(dt * Config.RotateSpeed, 0, 1))
+			
+			-- Force character to stay upright
+			if myChar:FindFirstChild("Humanoid") then
+				myChar.Humanoid.AutoRotate = false
+			end
+		end
+	else
+		-- Reset AutoRotate if not locking
+		if player.Character and player.Character:FindFirstChild("Humanoid") then
+			player.Character.Humanoid.AutoRotate = true
+		end
+	end
 end)
 
---// GUI BUTTONS (Example of how to link to Config)
--- You can add the toggle functions here to change Config.Enabled, Config.FOVRadius, etc.
+print("Combat Hub Loaded. Press K to hide/show menu.")
