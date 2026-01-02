@@ -2,233 +2,191 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UIS = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
 
---// PLAYER
+--// PLAYER & CAMERA
 local player = Players.LocalPlayer
+local mouse = player:GetMouse()
 local camera = workspace.CurrentCamera
 
---// CHARACTER
-local function getChar()
-	return player.Character or player.CharacterAdded:Wait()
-end
+--// VARIABLES
+local menuOpen = false
+local locked = false
+local hardLock = true
+local showCross = true
+local rotateSpeed = 15
+local lockPart = "HumanoidRootPart"
+local target = nil
 
---// ================= GUI =================
+--// ================= GUI CONSTRUCTION =================
 local gui = Instance.new("ScreenGui")
-gui.Name = "CombatHub"
+gui.Name = "CombatHub_Pro"
 gui.ResetOnSpawn = false
-gui.Enabled = false
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 gui.Parent = player:WaitForChild("PlayerGui")
 
-local main = Instance.new("Frame", gui)
-main.Size = UDim2.new(0, 420, 0, 420)
-main.Position = UDim2.new(0.5, -210, 0.5, -210)
-main.BackgroundColor3 = Color3.fromRGB(25, 10, 40)
+local main = Instance.new("Frame")
+main.Name = "Main"
+main.Size = UDim2.new(0, 300, 0, 380)
+main.Position = UDim2.new(0.5, -150, 0.5, -190)
+main.BackgroundColor3 = Color3.fromRGB(20, 15, 30)
 main.BorderSizePixel = 0
-Instance.new("UICorner", main).CornerRadius = UDim.new(0, 12)
+main.Visible = false
+main.Parent = gui
+
+Instance.new("UICorner", main).CornerRadius = UDim.new(0, 8)
+local stroke = Instance.new("UIStroke", main)
+stroke.Color = Color3.fromRGB(100, 60, 180)
+stroke.Thickness = 2
 
 local title = Instance.new("TextLabel", main)
 title.Size = UDim2.new(1, 0, 0, 40)
-title.Text = "COMBAT HUB"
+title.Text = "COMBAT HUB V2"
 title.Font = Enum.Font.GothamBold
-title.TextScaled = true
-title.TextColor3 = Color3.fromRGB(200, 120, 255)
+title.TextSize = 18
+title.TextColor3 = Color3.fromRGB(200, 150, 255)
 title.BackgroundTransparency = 1
 
-local y = 50
+--// DRAGGING SYSTEM
+local dragging, dragInput, dragStart, startPos
+main.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		dragging = true
+		dragStart = input.Position
+		startPos = main.Position
+	end
+end)
+UIS.InputChanged:Connect(function(input)
+	if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
+		local delta = input.Position - dragStart
+		main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+	end
+end)
+UIS.InputEnded:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
+end)
 
-local function label(text)
-	local l = Instance.new("TextLabel", main)
-	l.Position = UDim2.new(0, 20, 0, y)
-	l.Size = UDim2.new(1, -40, 0, 22)
-	l.Text = text
-	l.Font = Enum.Font.GothamBold
-	l.TextColor3 = Color3.fromRGB(170, 100, 255)
-	l.TextXAlignment = Left
-	l.BackgroundTransparency = 1
-	y += 26
-end
+local container = Instance.new("ScrollingFrame", main)
+container.Size = UDim2.new(1, -20, 1, -50)
+container.Position = UDim2.new(0, 10, 0, 45)
+container.BackgroundTransparency = 1
+container.ScrollBarThickness = 2
+container.CanvasSize = UDim2.new(0,0,0,400)
 
-local function toggle(text, callback)
-	local b = Instance.new("TextButton", main)
-	b.Position = UDim2.new(0, 20, 0, y)
-	b.Size = UDim2.new(1, -40, 0, 28)
+local layout = Instance.new("UIListLayout", container)
+layout.Padding = UDim.new(0, 8)
+layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+
+--// UTILS
+local function createButton(text, callback)
+	local b = Instance.new("TextButton", container)
+	b.Size = UDim2.new(1, -10, 0, 35)
+	b.BackgroundColor3 = Color3.fromRGB(40, 30, 60)
 	b.Text = text .. ": OFF"
-	b.Font = Enum.Font.Gotham
-	b.TextSize = 14
+	b.Font = Enum.Font.GothamSemibold
 	b.TextColor3 = Color3.new(1,1,1)
-	b.BackgroundColor3 = Color3.fromRGB(45, 20, 70)
-	b.BorderSizePixel = 0
+	b.TextSize = 13
 	Instance.new("UICorner", b)
-
+	
 	local state = false
 	b.MouseButton1Click:Connect(function()
 		state = not state
 		b.Text = text .. (state and ": ON" or ": OFF")
-		b.BackgroundColor3 = state and Color3.fromRGB(80, 30, 120) or Color3.fromRGB(45, 20, 70)
+		b.BackgroundColor3 = state and Color3.fromRGB(100, 50, 180) or Color3.fromRGB(40, 30, 60)
 		callback(state)
 	end)
-	y += 34
 end
 
-local function dropdown(text, options, callback)
-	local b = Instance.new("TextButton", main)
-	b.Position = UDim2.new(0, 20, 0, y)
-	b.Size = UDim2.new(1, -40, 0, 28)
-	b.Text = text .. ": " .. options[1]
-	b.Font = Enum.Font.Gotham
-	b.TextSize = 14
-	b.TextColor3 = Color3.new(1,1,1)
-	b.BackgroundColor3 = Color3.fromRGB(45, 20, 70)
-	b.BorderSizePixel = 0
-	Instance.new("UICorner", b)
-
-	local i = 1
-	b.MouseButton1Click:Connect(function()
-		i = i % #options + 1
-		b.Text = text .. ": " .. options[i]
-		callback(options[i])
-	end)
-	y += 34
-end
-
-local function slider(text, min, max, value, callback)
-	local bar = Instance.new("Frame", main)
-	bar.Position = UDim2.new(0, 20, 0, y)
-	bar.Size = UDim2.new(1, -40, 0, 10)
-	bar.BackgroundColor3 = Color3.fromRGB(45,20,70)
-	bar.BorderSizePixel = 0
-	Instance.new("UICorner", bar)
-
-	local fill = Instance.new("Frame", bar)
-	fill.BackgroundColor3 = Color3.fromRGB(200,120,255)
-	fill.BorderSizePixel = 0
-	fill.Size = UDim2.new((value-min)/(max-min),0,1,0)
-	Instance.new("UICorner", fill)
-
-	local dragging = false
-	bar.InputBegan:Connect(function(i)
-		if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = true end
-	end)
-	UIS.InputEnded:Connect(function(i)
-		if i.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
-	end)
-
-	RunService.RenderStepped:Connect(function()
-		if dragging then
-			local x = math.clamp((UIS:GetMouseLocation().X - bar.AbsolutePosition.X)/bar.AbsoluteSize.X,0,1)
-			fill.Size = UDim2.new(x,0,1,0)
-			callback(min + (max-min)*x)
-		end
-	end)
-
-	y += 22
-end
-
---// ================= LOCK SYSTEM =================
-local locked = false
-local hardLock = true
-local showCross = true
-local rotateSpeed = 12
-local lockPart = "HumanoidRootPart"
-
-local target = nil
-local lastPos = nil
-local targets = {}
-local index = 1
-
+--// CROSSHAIR
 local cross = Instance.new("Frame", gui)
-cross.Size = UDim2.new(0,26,0,26)
+cross.Size = UDim2.new(0,20,0,20)
 cross.BackgroundTransparency = 1
 cross.Visible = false
-for _,v in pairs({true,false}) do
-	local f = Instance.new("Frame", cross)
-	f.Size = v and UDim2.new(0,2,1,0) or UDim2.new(1,0,0,2)
-	f.Position = v and UDim2.new(0.5,-1,0,0) or UDim2.new(0,0,0.5,-1)
-	f.BackgroundColor3 = Color3.fromRGB(200,120,255)
-	f.BorderSizePixel = 0
-end
+local ch1 = Instance.new("Frame", cross)
+ch1.Size = UDim2.new(0,2,1,0)
+ch1.Position = UDim2.new(0.5,-1,0,0)
+ch1.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+local ch2 = Instance.new("Frame", cross)
+ch2.Size = UDim2.new(1,0,0,2)
+ch2.Position = UDim2.new(0,0,0.5,-1)
+ch2.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
 
-local function refreshTargets()
-	targets = {}
-	local char = getChar()
-	for _,m in ipairs(workspace:GetDescendants()) do
-		if m:IsA("Model") and m ~= char and m:FindFirstChild("Humanoid") and m:FindFirstChild("HumanoidRootPart") then
-			table.insert(targets, m)
+--// LOGIC FUNCTIONS
+local function getClosestTarget()
+	local closest = nil
+	local dist = math.huge
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p ~= player and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+			local hum = p.Character:FindFirstChild("Humanoid")
+			if hum and hum.Health > 0 then
+				local pos, onScreen = camera:WorldToViewportPoint(p.Character.HumanoidRootPart.Position)
+				if onScreen then
+					local mouseDist = (Vector2.new(pos.X, pos.Y) - UIS:GetMouseLocation()).Magnitude
+					if mouseDist < dist then
+						dist = mouseDist
+						closest = p.Character
+					end
+				end
+			end
 		end
 	end
+	return closest
 end
 
---// ================= GUI CONTENT =================
-label("Lock Settings")
+--// GUI CONTENT
+createButton("Aim Lock", function(v) locked = v end)
+createButton("Hard Tracking", function(v) hardLock = v end)
+createButton("Show Crosshair", function(v) showCross = v end)
 
-toggle("Lock On", function(v)
-	locked = v
-	local hum = getChar():FindFirstChild("Humanoid")
-	if v then
-		refreshTargets()
-		target = targets[1]
-		if hum then hum.AutoRotate = false end
-	else
-		if hum then hum.AutoRotate = true end
-	end
-end)
-
-toggle("Hard Lock", function(v) hardLock = v end)
-toggle("Crosshair", function(v) showCross = v cross.Visible = v end)
-
-dropdown("Lock Part", {"Torso","Head"}, function(v)
-	lockPart = v == "Head" and "Head" or "HumanoidRootPart"
-end)
-
-label("Rotation Speed")
-slider("Speed", 2, 25, rotateSpeed, function(v)
-	rotateSpeed = v
-end)
-
---// ================= INPUT =================
-UIS.InputBegan:Connect(function(i,g)
-	if g then return end
+--// KEYBIND LISTENER
+UIS.InputBegan:Connect(function(i, processed)
+	if processed then return end
+	
 	if i.KeyCode == Enum.KeyCode.K then
-		gui.Enabled = not gui.Enabled
+		menuOpen = not menuOpen
+		main.Visible = menuOpen
+		UIS.MouseIconEnabled = not menuOpen
 	end
-	if i.KeyCode == Enum.KeyCode.E and locked then
-		index = index % #targets + 1
-		target = targets[index]
-	end
+	
 	if i.KeyCode == Enum.KeyCode.Q and locked then
-		index = (index - 2) % #targets + 1
-		target = targets[index]
+		target = getClosestTarget()
 	end
 end)
 
---// ================= MAIN LOOP =================
+--// MAIN LOOP
 RunService.RenderStepped:Connect(function(dt)
-	if not locked then return end
-	local char = getChar()
-	local root = char:FindFirstChild("HumanoidRootPart")
-	local hum = char:FindFirstChild("Humanoid")
-	if not root or not hum then return end
-
-	hum.AutoRotate = false
-
-	local aim
-	if target and target:FindFirstChild(lockPart) then
-		aim = target[lockPart].Position
-		lastPos = aim
-	elseif hardLock then
-		aim = lastPos
-	end
-	if not aim then return end
-
-	local d = aim - root.Position
-	local flat = Vector3.new(d.X,0,d.Z)
-	root.CFrame = root.CFrame:Lerp(CFrame.lookAt(root.Position, root.Position+flat), math.clamp(dt*rotateSpeed,0,1))
-
-	if showCross then
-		local s,on = camera:WorldToViewportPoint(aim)
-		if on then
-			cross.Visible = true
-			cross.Position = UDim2.new(0,s.X-13,0,s.Y-13)
+	if locked and target and target:FindFirstChild(lockPart) then
+		local char = player.Character
+		if not char then return end
+		local root = char:FindFirstChild("HumanoidRootPart")
+		local hum = char:FindFirstChild("Humanoid")
+		
+		if root and hum then
+			-- Check if target is dead
+			if target.Humanoid.Health <= 0 then
+				target = nil
+				return
+			end
+			
+			hum.AutoRotate = false
+			local lookPos = target[lockPart].Position
+			local goal = CFrame.lookAt(root.Position, Vector3.new(lookPos.X, root.Position.Y, lookPos.Z))
+			root.CFrame = root.CFrame:Lerp(goal, math.clamp(dt * rotateSpeed, 0, 1))
+			
+			if showCross then
+				local pos, onScreen = camera:WorldToViewportPoint(lookPos)
+				if onScreen then
+					cross.Visible = true
+					cross.Position = UDim2.new(0, pos.X - 10, 0, pos.Y - 10)
+				else
+					cross.Visible = false
+				end
+			end
+		end
+	else
+		cross.Visible = false
+		if player.Character and player.Character:FindFirstChild("Humanoid") then
+			player.Character.Humanoid.AutoRotate = true
 		end
 	end
 end)
